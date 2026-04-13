@@ -1,0 +1,118 @@
+{
+  "name": "WA - Inbound Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wa-inbound/:provider",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "94bf286a-7851-4006-bec4-e9eef4541788",
+      "name": "Webhook Inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "93efaff1-bea4-45bc-bc56-292f983285b5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst provider = item.json.params?.provider || 'evolution_api';\nconst rawBody = item.json.body_raw || JSON.stringify(item.json.body);\nconst signature = item.json.headers['x-hub-signature-256'] || '';\n\nconst secrets = {\n  meta_cloud: $env.WA_WEBHOOK_SECRET_META,\n  evolution_api: $env.WA_WEBHOOK_SECRET_EVOLUTION,\n};\nconst secret = secrets[provider];\nif (!secret) throw new Error('provider_not_supported:' + provider);\n\nconst expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\nif (signature !== expected) {\n  throw new Error('invalid_signature');\n}\n\nconst correlation_id = 'corr_' + crypto.randomUUID();\nreturn [{\n  json: {\n    correlation_id,\n    provider,\n    received_at: new Date().toISOString(),\n    raw: item.json.body,\n  }\n}];"
+      },
+      "id": "9993d74e-ee32-48ab-9c0f-495a6b61dd92",
+      "name": "Verify HMAC & Init",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"ok\", \"correlation_id\": $json.correlation_id } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "41458564-08a3-4cce-9670-aee2bc37e6c9",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "<__PLACEHOLDER_VALUE__Select workflow: WA - Normalize Incoming__>",
+        "workflowInputs": "{{ { \"raw\": $json.raw, \"provider\": $json.provider, \"correlation_id\": $json.correlation_id, \"received_at\": $json.received_at } }}",
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "49ad6635-d01f-47e0-bcb4-0e701509e948",
+      "name": "Dispatch Normalize",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        912,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Inbound": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC & Init",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC & Init": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200": {
+      "main": [
+        [
+          {
+            "node": "Dispatch Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "edbcb18d-4d64-4426-8a17-7d3af5926b4d",
+  "meta": {
+    "instanceId": "8165f5f8530e3eb3d75ac2cd46c51982b82512c2db5ee22a9e949b096ae56b64"
+  },
+  "id": "hrPsuSiy4LOvLouW",
+  "tags": []
+}
