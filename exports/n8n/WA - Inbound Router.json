@@ -14,46 +14,216 @@
       "name": "Webhook Inbound",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [
-        240,
-        304
-      ],
+      "position": [240, 300],
       "webhookId": "93efaff1-bea4-45bc-bc56-292f983285b5"
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst provider = item.json.params?.provider || 'evolution_api';\nconst rawBody = item.json.body_raw || JSON.stringify(item.json.body);\nconst signature = item.json.headers['x-hub-signature-256'] || '';\n\nconst secrets = {\n  meta_cloud: $env.WA_WEBHOOK_SECRET_META,\n  evolution_api: $env.WA_WEBHOOK_SECRET_EVOLUTION,\n};\nconst secret = secrets[provider];\nif (!secret) throw new Error('provider_not_supported:' + provider);\n\nconst expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');\nif (signature !== expected) {\n  throw new Error('invalid_signature');\n}\n\nconst correlation_id = 'corr_' + crypto.randomUUID();\nreturn [{\n  json: {\n    correlation_id,\n    provider,\n    received_at: new Date().toISOString(),\n    raw: item.json.body,\n  }\n}];"
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst provider = (item.json.params?.provider || '').toLowerCase().trim();\n\nreturn [{\n  json: {\n    ...item.json,\n    correlation_id: 'corr_' + crypto.randomUUID(),\n    received_at: new Date().toISOString(),\n    _provider: provider,\n  },\n  binary: item.binary,\n}];"
       },
-      "id": "9993d74e-ee32-48ab-9c0f-495a6b61dd92",
-      "name": "Verify HMAC & Init",
+      "id": "b1a20001-0001-4000-8000-000000000001",
+      "name": "Generate Correlation ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        464,
-        304
-      ]
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ALLOWED = ['meta_cloud', 'evolution_api', '360dialog'];\nconst item = $input.first();\n\nreturn [{\n  json: {\n    ...item.json,\n    _valid_provider: ALLOWED.includes(item.json._provider),\n  },\n  binary: item.binary,\n}];"
+      },
+      "id": "b1a20001-0002-4000-8000-000000000002",
+      "name": "Validate Provider",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-provider-valid",
+              "leftValue": "={{ $json._valid_provider }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1a20001-0003-4000-8000-000000000003",
+      "name": "Provider Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"unsupported_provider\", \"provider\": $json._provider, \"correlation_id\": $json.correlation_id } }}",
+        "options": {
+          "responseCode": 400,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "X-Correlation-Id",
+                "value": "={{ $json.correlation_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b1a20001-0004-4000-8000-000000000004",
+      "name": "Respond 400",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1180, 540]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst item = $input.first();\nconst provider = item.json._provider;\nlet valid = false;\n\nif (provider === 'meta_cloud') {\n  const signature = item.json.headers?.['x-hub-signature-256'] || '';\n  let rawBody;\n  if (item.binary?.data?.data) {\n    rawBody = Buffer.from(item.binary.data.data, 'base64').toString('utf8');\n  } else {\n    rawBody = typeof item.json.body === 'string'\n      ? item.json.body\n      : JSON.stringify(item.json.body);\n  }\n  const secret = $env.WA_WEBHOOK_SECRET_META || '';\n  if (secret && signature) {\n    const expected = 'sha256=' + crypto\n      .createHmac('sha256', secret)\n      .update(rawBody)\n      .digest('hex');\n    const sigBuf = Buffer.from(signature, 'utf8');\n    const expBuf = Buffer.from(expected, 'utf8');\n    valid = sigBuf.length === expBuf.length\n      && crypto.timingSafeEqual(sigBuf, expBuf);\n  }\n} else if (provider === 'evolution_api') {\n  const apikey = item.json.headers?.['apikey']\n    || item.json.query?.apikey || '';\n  const expected = $env.WA_EVOLUTION_API_KEY || '';\n  valid = expected !== '' && apikey === expected;\n} else if (provider === '360dialog') {\n  const header = item.json.headers?.['d360-api-key'] || '';\n  const expected = $env.WA_360DIALOG_API_KEY || '';\n  valid = expected !== '' && header === expected;\n}\n\nreturn [{\n  json: {\n    ...item.json,\n    _auth_valid: valid,\n  },\n  binary: item.binary,\n}];"
+      },
+      "id": "b1a20001-0005-4000-8000-000000000005",
+      "name": "Verify Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1180, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-auth-valid",
+              "leftValue": "={{ $json._auth_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1a20001-0006-4000-8000-000000000006",
+      "name": "Auth Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1400, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"error\": \"authentication_failed\", \"provider\": $json._provider, \"correlation_id\": $json.correlation_id } }}",
+        "options": {
+          "responseCode": 401,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "X-Correlation-Id",
+                "value": "={{ $json.correlation_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b1a20001-0007-4000-8000-000000000007",
+      "name": "Respond 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1620, 540]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst provider = item.json._provider;\nconst body = item.json.body;\nlet isMessage = false;\n\nif (provider === 'meta_cloud') {\n  try {\n    const changes = body?.entry?.[0]?.changes?.[0]?.value;\n    isMessage = Array.isArray(changes?.messages) && changes.messages.length > 0;\n  } catch (e) { isMessage = false; }\n} else if (provider === 'evolution_api') {\n  isMessage = body?.event === 'messages.upsert'\n    || (body?.data?.message !== undefined && body?.data?.key !== undefined);\n} else if (provider === '360dialog') {\n  try {\n    isMessage = Array.isArray(body?.messages) && body.messages.length > 0;\n  } catch (e) { isMessage = false; }\n}\n\nreturn [{\n  json: {\n    ...item.json,\n    _is_message: isMessage,\n  },\n  binary: item.binary,\n}];"
+      },
+      "id": "b1a20001-0008-4000-8000-000000000008",
+      "name": "Filter Event Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1620, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [
+            {
+              "id": "cond-is-message",
+              "leftValue": "={{ $json._is_message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1a20001-0009-4000-8000-000000000009",
+      "name": "Is Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1840, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"ack\", \"event\": \"non_message\", \"correlation_id\": $json.correlation_id } }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "X-Correlation-Id",
+                "value": "={{ $json.correlation_id }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b1a20001-000a-4000-8000-00000000000a",
+      "name": "Respond 200 Ack",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [2060, 540]
     },
     {
       "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { \"status\": \"ok\", \"correlation_id\": $json.correlation_id } }}",
         "options": {
-          "responseCode": 200
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "X-Correlation-Id",
+                "value": "={{ $json.correlation_id }}"
+              }
+            ]
+          }
         }
       },
-      "id": "41458564-08a3-4cce-9670-aee2bc37e6c9",
-      "name": "Respond 200",
+      "id": "b1a20001-000b-4000-8000-00000000000b",
+      "name": "Respond 200 OK",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [
-        688,
-        304
-      ]
+      "position": [2060, 300]
     },
     {
       "parameters": {
-        "workflowId": "<__PLACEHOLDER_VALUE__Select workflow: WA - Normalize Incoming__>",
-        "workflowInputs": "{{ { \"raw\": $json.raw, \"provider\": $json.provider, \"correlation_id\": $json.correlation_id, \"received_at\": $json.received_at } }}",
+        "workflowId": "__SET_TO_WA_NORMALIZE_INCOMING_WORKFLOW_ID__",
+        "workflowInputs": "{{ { \"raw\": $json.body, \"provider\": $json._provider, \"correlation_id\": $json.correlation_id, \"received_at\": $json.received_at } }}",
         "options": {
           "waitForSubWorkflow": false
         }
@@ -62,10 +232,7 @@
       "name": "Dispatch Normalize",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.3,
-      "position": [
-        912,
-        304
-      ]
+      "position": [2300, 300]
     }
   ],
   "pinData": {},
@@ -74,25 +241,112 @@
       "main": [
         [
           {
-            "node": "Verify HMAC & Init",
+            "node": "Generate Correlation ID",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Verify HMAC & Init": {
+    "Generate Correlation ID": {
       "main": [
         [
           {
-            "node": "Respond 200",
+            "node": "Validate Provider",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Respond 200": {
+    "Validate Provider": {
+      "main": [
+        [
+          {
+            "node": "Provider Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider Valid?": {
+      "main": [
+        [
+          {
+            "node": "Verify Auth",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 400",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Auth": {
+      "main": [
+        [
+          {
+            "node": "Auth Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Valid?": {
+      "main": [
+        [
+          {
+            "node": "Filter Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Event Type": {
+      "main": [
+        [
+          {
+            "node": "Is Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Message?": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200 Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 200 OK": {
       "main": [
         [
           {
@@ -107,7 +361,10 @@
   "active": false,
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "saveExecutionProgress": true,
+    "executionTimeout": 30,
+    "errorWorkflow": "__SET_TO_WA_ERROR_HANDLER_WORKFLOW_ID__"
   },
   "versionId": "edbcb18d-4d64-4426-8a17-7d3af5926b4d",
   "meta": {
