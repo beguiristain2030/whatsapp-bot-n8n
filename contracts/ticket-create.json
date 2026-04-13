@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/ticket-create.json",
+  "title": "Create Ticket (POST /v1/tickets)",
+  "description": "Payload para crear un ticket en el sistema principal. DEBE enviarse con header Idempotency-Key = correlation_id para evitar duplicados.",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "conversation_id",
+    "type",
+    "source",
+    "payload"
+  ],
+  "properties": {
+    "tenant_id": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "conversation_id": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": ["deposit", "withdrawal", "user_creation", "support", "other"]
+    },
+    "source": {
+      "type": "object",
+      "required": ["channel"],
+      "properties": {
+        "channel": { "type": "string", "const": "whatsapp" },
+        "phone": { "type": "string" },
+        "instance_id": { "type": "string" },
+        "provider": { "type": "string" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "description": "Datos recolectados por la conversación. Shape depende del type del ticket.",
+      "additionalProperties": true,
+      "examples": [
+        { "amount": 5000, "receipt": { "media_id": "med_01HX...", "hash": "sha256:...", "storage_url": "s3://..." } },
+        { "amount": 2000, "destination_account": { "cbu": "0000000000000000000000" } },
+        { "full_name": "Juan Perez", "document_id": "12345678" },
+        { "issue_description": "No puedo ingresar a mi cuenta" }
+      ]
+    },
+    "risk": {
+      "type": ["object", "null"],
+      "properties": {
+        "score": { "type": "string", "enum": ["low", "medium", "high"] },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal" },
+    "requested_by": {
+      "type": "object",
+      "properties": {
+        "phone": { "type": "string" },
+        "display_name": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "headers_required": {
+    "Idempotency-Key": "correlation_id",
+    "X-Tenant-Id": "tenant_id",
+    "Authorization": "Bearer <service_jwt>"
+  },
+  "responses": {
+    "201": { "example": { "ticket_id": "tkt_01HX...", "status": "open", "created_at": "2026-04-10T14:24:00Z" } },
+    "409": { "description": "Idempotencia: ticket ya creado", "example": { "ticket_id": "tkt_01HX...", "status": "open", "duplicate": true } },
+    "422": { "description": "Payload inválido" },
+    "5xx": { "description": "Retry with backoff (ver docs/errors-robustness.md)" }
+  }
+}

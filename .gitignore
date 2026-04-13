@@ -1,0 +1,7 @@
+environments/.env
+environments/.env.*
+!environments/.env.example
+.DS_Store
+node_modules/
+*.log
+.vscode/

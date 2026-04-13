@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/message-log.json",
+  "title": "Persist Message (POST /v1/messages)",
+  "description": "Payload que n8n envía al sistema principal para persistir un mensaje (inbound u outbound) con barrera de idempotencia. El backend DEBE tener índice único (tenant_id, provider_message_id).",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "direction",
+    "provider_message_id",
+    "conversation_hint",
+    "type",
+    "content",
+    "timestamp"
+  ],
+  "properties": {
+    "tenant_id": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "direction": { "type": "string", "enum": ["inbound", "outbound"] },
+    "provider_message_id": { "type": "string" },
+    "conversation_id": { "type": ["string", "null"], "description": "null en el primer mensaje; el backend lo resuelve o lo crea" },
+    "conversation_hint": { "type": "string", "description": "phone normalizado E.164" },
+    "type": { "type": "string", "enum": ["text", "image", "audio", "document", "video", "location", "interactive", "unsupported"] },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": { "type": ["string", "null"] },
+        "media_id": { "type": ["string", "null"], "description": "id del record de media si aplica" },
+        "media_hash": { "type": ["string", "null"] },
+        "storage_url": { "type": ["string", "null"] }
+      }
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "instance_id": { "type": "string" },
+        "provider": { "type": "string" },
+        "sender_display_name": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "responses": {
+    "201": { "description": "Mensaje persistido por primera vez", "example": { "id": "msg_01HX...", "conversation_id": "conv_01HX..." } },
+    "409": { "description": "Duplicado (idempotencia)", "example": { "code": "duplicate", "id": "msg_01HX...", "conversation_id": "conv_01HX..." } }
+  }
+}

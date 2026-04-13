@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/error-event.json",
+  "title": "Error / Dead Letter (POST /v1/dead_letter)",
+  "description": "Cuando un workflow agota sus retries o cae en un error irrecuperable, n8n lo envía aquí. El sistema principal lo persiste para reintento manual o inspección.",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "source_workflow",
+    "error_class",
+    "message",
+    "occurred_at",
+    "payload"
+  ],
+  "properties": {
+    "tenant_id": { "type": ["string", "null"], "description": "puede ser null si el error ocurrió antes de resolver tenant" },
+    "correlation_id": { "type": "string" },
+    "conversation_id": { "type": ["string", "null"] },
+    "source_workflow": {
+      "type": "string",
+      "description": "nombre del workflow (p. ej. WA - Create Ticket)"
+    },
+    "source_step": { "type": ["string", "null"], "description": "nombre del nodo que falló si se conoce" },
+    "error_class": {
+      "type": "string",
+      "enum": [
+        "http_5xx",
+        "http_4xx",
+        "timeout",
+        "validation",
+        "integration",
+        "logic",
+        "dependency_down",
+        "unknown"
+      ]
+    },
+    "message": { "type": "string" },
+    "stack": { "type": ["string", "null"] },
+    "retries_attempted": { "type": "integer", "minimum": 0 },
+    "payload": {
+      "type": "object",
+      "description": "Input original del workflow que falló, para poder reintentar",
+      "additionalProperties": true
+    },
+    "occurred_at": { "type": "string", "format": "date-time" }
+  },
+  "responses": {
+    "201": { "example": { "dlq_id": "dlq_01HX...", "alert_sent": true } }
+  }
+}

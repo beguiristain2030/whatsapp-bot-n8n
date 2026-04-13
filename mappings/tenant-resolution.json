@@ -1,0 +1,44 @@
+{
+  "$comment": "Mapping instance_id/destination_number -> tenant_id. En Fase 1 vive en este archivo; en Fase 2 se migra a DB del sistema principal y se cachea en n8n (Static Data) con TTL.",
+  "version": "1.0",
+  "strategy": "by_instance_id_then_by_destination_number",
+  "cache": {
+    "enabled": true,
+    "ttl_seconds": 300,
+    "store": "n8n_static_data"
+  },
+  "mappings": [
+    {
+      "instance_id": "wa_instance_acme",
+      "destination_number": "+5491144444444",
+      "tenant_id": "tenant_acme",
+      "provider": "evolution_api",
+      "features": {
+        "intent_engine": "rules",
+        "media_enabled": true,
+        "risk_rules": true,
+        "high_amount_threshold": 100000
+      },
+      "credentials_ref": "wa_creds_acme"
+    },
+    {
+      "instance_id": "wa_instance_beta",
+      "destination_number": "+5491133333333",
+      "tenant_id": "tenant_beta",
+      "provider": "meta_cloud",
+      "features": {
+        "intent_engine": "hybrid",
+        "media_enabled": true,
+        "risk_rules": true,
+        "high_amount_threshold": 50000
+      },
+      "credentials_ref": "wa_creds_beta"
+    }
+  ],
+  "on_no_match": {
+    "action": "log_and_reject",
+    "response_text": null,
+    "dead_letter": true,
+    "$comment": "NUNCA responder a un número no mapeado; eso abre enumeración/abuso"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/handoff-human.json",
+  "title": "Escalate to Human (POST /v1/handoff)",
+  "description": "Marca la conversación como mode=human. A partir de este punto el bot NO responde hasta que el sistema principal vuelva a setear mode=bot.",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "conversation_id",
+    "reason"
+  ],
+  "properties": {
+    "tenant_id": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "conversation_id": { "type": "string" },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "user_requested",
+        "fallback_exhausted",
+        "turn_limit",
+        "high_risk",
+        "high_amount",
+        "duplicate_media_cross_user",
+        "ticket_creation_failed",
+        "manual_trigger"
+      ]
+    },
+    "details": { "type": ["string", "null"], "description": "Texto libre para el operador" },
+    "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal" },
+    "context_snapshot": {
+      "type": "object",
+      "description": "Snapshot mínimo de la conversación al momento del handoff, para que el operador no tenga que adivinar",
+      "properties": {
+        "current_intent": { "type": ["string", "null"] },
+        "collected_data": { "type": "object", "additionalProperties": true },
+        "last_user_message": { "type": ["string", "null"] },
+        "last_bot_question": { "type": ["string", "null"] },
+        "turn_count": { "type": "integer" }
+      }
+    }
+  },
+  "headers_required": {
+    "Idempotency-Key": "correlation_id",
+    "X-Tenant-Id": "tenant_id"
+  },
+  "responses": {
+    "200": { "example": { "conversation_id": "conv_01HX...", "mode": "human", "handoff_id": "hof_01HX...", "assigned_to": null } },
+    "404": { "description": "conversation_id inexistente" }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "$comment": "Tabla de transiciones usada por WA - Conversation Orchestrator. Es la fuente de verdad operativa de la máquina de estados (ver docs/conversation-model.md).",
+  "version": "1.0",
+  "states": [
+    "bot_active",
+    "waiting_user",
+    "collecting_data",
+    "ready_to_create_ticket",
+    "handoff_to_human",
+    "resolved"
+  ],
+  "initial_state": "bot_active",
+  "terminal_states": ["resolved", "handoff_to_human"],
+  "transitions": [
+    { "from": "bot_active", "event": "intent_requires_fields", "to": "collecting_data" },
+    { "from": "bot_active", "event": "intent_consulta", "to": "resolved" },
+    { "from": "bot_active", "event": "intent_handoff", "to": "handoff_to_human", "side_effect": "set_mode_human" },
+    { "from": "bot_active", "event": "intent_unknown", "to": "bot_active", "side_effect": "increment_fallback_count" },
+
+    { "from": "collecting_data", "event": "fields_complete", "to": "ready_to_create_ticket" },
+    { "from": "collecting_data", "event": "field_missing", "to": "collecting_data", "side_effect": "ask_next_field" },
+    { "from": "collecting_data", "event": "user_requested_human", "to": "handoff_to_human", "side_effect": "set_mode_human" },
+    { "from": "collecting_data", "event": "turn_limit_exceeded", "to": "handoff_to_human", "side_effect": "set_mode_human" },
+    { "from": "collecting_data", "event": "intent_changed", "to": "collecting_data", "side_effect": "confirm_intent_change" },
+
+    { "from": "ready_to_create_ticket", "event": "ticket_created", "to": "resolved" },
+    { "from": "ready_to_create_ticket", "event": "ticket_failed_retries_exhausted", "to": "handoff_to_human", "side_effect": "set_mode_human" },
+
+    { "from": "resolved", "event": "new_user_message", "to": "bot_active" },
+
+    { "from": "*", "event": "risk_score_high", "to": "handoff_to_human", "side_effect": "set_mode_human" },
+    { "from": "*", "event": "mode_is_human", "to": "handoff_to_human", "side_effect": "noop_bot_silent" }
+  ],
+  "anti_loop_rules": {
+    "max_turn_count_without_progress": 10,
+    "max_fallback_count_before_handoff": 3
+  }
+}

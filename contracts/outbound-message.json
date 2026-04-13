@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/outbound-message.json",
+  "title": "Outbound Message",
+  "description": "Formato interno con el que el Orchestrator instruye a WA - Send Outbound qué enviar. Send Outbound lo traduce al shape del proveedor activo.",
+  "type": "object",
+  "required": ["tenant_id", "correlation_id", "conversation_id", "to", "type", "content"],
+  "properties": {
+    "tenant_id": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "conversation_id": { "type": "string" },
+    "instance_id": { "type": "string" },
+    "to": {
+      "type": "object",
+      "required": ["phone"],
+      "properties": { "phone": { "type": "string" } }
+    },
+    "type": {
+      "type": "string",
+      "enum": ["text", "image", "document", "interactive_buttons", "interactive_list", "template"]
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "text": { "type": ["string", "null"] },
+        "media_url": { "type": ["string", "null"] },
+        "caption": { "type": ["string", "null"] },
+        "template_name": { "type": ["string", "null"] },
+        "template_params": { "type": ["array", "null"], "items": { "type": "string" } },
+        "buttons": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string", "maxLength": 20 }
+            }
+          }
+        },
+        "list": {
+          "type": ["object", "null"],
+          "properties": {
+            "button_text": { "type": "string" },
+            "sections": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["id", "title"],
+                      "properties": {
+                        "id": { "type": "string" },
+                        "title": { "type": "string" },
+                        "description": { "type": ["string", "null"] }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "reply_to_message_id": { "type": ["string", "null"] },
+        "typing_simulation_ms": { "type": ["integer", "null"] }
+      }
+    }
+  },
+  "examples": [
+    {
+      "tenant_id": "tenant_acme",
+      "correlation_id": "corr_01HX...",
+      "conversation_id": "conv_01HX...",
+      "instance_id": "wa_instance_acme",
+      "to": { "phone": "+5491155555555" },
+      "type": "text",
+      "content": { "text": "Perfecto, enviame el comprobante como imagen." }
+    }
+  ]
+}

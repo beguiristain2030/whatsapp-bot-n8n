@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/inbound-normalized.json",
+  "title": "Inbound Normalized Message",
+  "description": "Formato estándar al que WA - Normalize Incoming convierte cualquier payload del proveedor. Es el contrato límite del bot: todo lo que corre aguas abajo depende de este shape. Cambios aquí requieren bump de versión.",
+  "type": "object",
+  "required": [
+    "version",
+    "correlation_id",
+    "tenant_id",
+    "conversation_hint",
+    "provider",
+    "instance_id",
+    "provider_message_id",
+    "from",
+    "to",
+    "type",
+    "timestamp",
+    "content"
+  ],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "correlation_id": {
+      "type": "string",
+      "description": "UUID generado en Inbound Router. Se propaga a todos los sub-workflows y logs."
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Se completa en WA - Resolve Tenant. En Normalize puede venir null y es OK."
+    },
+    "conversation_hint": {
+      "type": "string",
+      "description": "phone normalizado en E.164; usado por Load Conversation para buscar/crear"
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["meta_cloud", "evolution_api", "360dialog", "other"]
+    },
+    "instance_id": {
+      "type": "string",
+      "description": "Identificador de la instancia/numero destino del proveedor"
+    },
+    "provider_message_id": {
+      "type": "string",
+      "description": "ID único del mensaje en el proveedor (wamid.HBgM... en Meta). Clave de idempotencia."
+    },
+    "from": {
+      "type": "object",
+      "required": ["phone"],
+      "properties": {
+        "phone": { "type": "string", "description": "E.164, ej. +5491155555555" },
+        "display_name": { "type": ["string", "null"] },
+        "profile_pic_url": { "type": ["string", "null"] }
+      }
+    },
+    "to": {
+      "type": "object",
+      "required": ["phone"],
+      "properties": {
+        "phone": { "type": "string", "description": "Número del bot, E.164" }
+      }
+    },
+    "type": {
+      "type": "string",
+      "enum": ["text", "image", "audio", "document", "video", "location", "interactive", "unsupported"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Momento del mensaje según el proveedor, ISO-8601 UTC"
+    },
+    "content": {
+      "type": "object",
+      "description": "Shape dependiente de type",
+      "properties": {
+        "text": { "type": ["string", "null"] },
+        "media": {
+          "type": ["object", "null"],
+          "properties": {
+            "provider_media_id": { "type": "string" },
+            "mime_type": { "type": "string" },
+            "size_bytes": { "type": ["integer", "null"] },
+            "filename": { "type": ["string", "null"] },
+            "caption": { "type": ["string", "null"] },
+            "download_url_temp": { "type": ["string", "null"], "description": "URL temporal del proveedor. No persistir. No exponer al usuario final." }
+          }
+        },
+        "location": {
+          "type": ["object", "null"],
+          "properties": {
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" }
+          }
+        },
+        "interactive": {
+          "type": ["object", "null"],
+          "description": "Respuesta a botones o listas",
+          "properties": {
+            "button_id": { "type": ["string", "null"] },
+            "list_id": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Campos opcionales para auditoría/debug",
+      "properties": {
+        "raw_payload_hash": { "type": "string" },
+        "provider_timestamp_unix": { "type": "integer" },
+        "received_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "correlation_id": "corr_01HXYZABC",
+      "tenant_id": null,
+      "conversation_hint": "+5491155555555",
+      "provider": "evolution_api",
+      "instance_id": "wa_instance_acme",
+      "provider_message_id": "wamid.HBgM...",
+      "from": { "phone": "+5491155555555", "display_name": "Juan P." },
+      "to": { "phone": "+5491144444444" },
+      "type": "text",
+      "timestamp": "2026-04-10T14:22:10Z",
+      "content": { "text": "quiero cargar 5000" },
+      "metadata": { "received_at": "2026-04-10T14:22:10.123Z" }
+    }
+  ]
+}

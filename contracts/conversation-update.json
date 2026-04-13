@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/conversation-update.json",
+  "title": "Conversation Read/Update",
+  "description": "Contratos GET y PUT de /v1/conversations/{id}. El estado conversacional vive en el sistema principal, nunca en n8n.",
+  "definitions": {
+    "handoff": {
+      "type": "object",
+      "properties": {
+        "active": { "type": "boolean" },
+        "reason": { "type": ["string", "null"] },
+        "requested_at": { "type": ["string", "null"], "format": "date-time" },
+        "operator_id": { "type": ["string", "null"] }
+      },
+      "required": ["active"]
+    },
+    "conversation": {
+      "type": "object",
+      "required": [
+        "conversation_id",
+        "tenant_id",
+        "phone",
+        "state",
+        "mode",
+        "turn_count",
+        "updated_at"
+      ],
+      "properties": {
+        "conversation_id": { "type": "string" },
+        "tenant_id": { "type": "string" },
+        "phone": { "type": "string" },
+        "instance_id": { "type": ["string", "null"] },
+        "state": {
+          "type": "string",
+          "enum": ["bot_active", "waiting_user", "collecting_data", "ready_to_create_ticket", "handoff_to_human", "resolved"]
+        },
+        "mode": { "type": "string", "enum": ["bot", "human"] },
+        "current_intent": {
+          "type": ["string", "null"],
+          "enum": [null, "crear_usuario", "cargar_saldo", "retirar_saldo", "consulta", "soporte", "handoff", "unknown"]
+        },
+        "collected_data": { "type": "object", "additionalProperties": true },
+        "required_fields": { "type": "array", "items": { "type": "string" } },
+        "missing_fields": { "type": "array", "items": { "type": "string" } },
+        "last_bot_question": { "type": ["string", "null"] },
+        "last_user_message_id": { "type": ["string", "null"] },
+        "turn_count": { "type": "integer", "minimum": 0 },
+        "handoff": { "$ref": "#/definitions/handoff" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "expires_at": { "type": ["string", "null"], "format": "date-time" },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "correlation_ids": { "type": "array", "items": { "type": "string" } },
+            "source": { "type": "string" },
+            "provider": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "operations": {
+    "get_by_phone": {
+      "method": "GET",
+      "path": "/v1/conversations?tenant_id={tenant_id}&phone={phone}&active=true",
+      "response_200_schema": { "$ref": "#/definitions/conversation" },
+      "response_404": { "description": "No existe activa; el orchestrator debe crear una nueva" }
+    },
+    "put_update": {
+      "method": "PUT",
+      "path": "/v1/conversations/{conversation_id}",
+      "headers": {
+        "If-Match": "{updated_at}  // optimistic locking"
+      },
+      "request_schema": { "$ref": "#/definitions/conversation" },
+      "response_200_schema": { "$ref": "#/definitions/conversation" },
+      "response_409": { "description": "Conflicto de concurrencia; reintentar con GET+merge" }
+    }
+  }
+}

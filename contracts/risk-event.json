@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/risk-event.json",
+  "title": "Risk Event (POST /v1/risk_events)",
+  "description": "n8n reporta al sistema principal cualquier señal relevante de riesgo/fraude. El backend correlaciona y puede devolver decisiones (bloquear usuario, marcar ticket, etc.)",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "conversation_id",
+    "type",
+    "severity",
+    "observed_at"
+  ],
+  "properties": {
+    "tenant_id": { "type": "string" },
+    "correlation_id": { "type": "string" },
+    "conversation_id": { "type": "string" },
+    "phone": { "type": "string" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "duplicate_media_same_user",
+        "duplicate_media_cross_user",
+        "amount_above_threshold",
+        "message_flood",
+        "unusual_hour",
+        "blocked_user",
+        "keyword_risk_match",
+        "other"
+      ]
+    },
+    "severity": { "type": "string", "enum": ["low", "medium", "high"] },
+    "details": {
+      "type": "object",
+      "description": "Shape dependiente de type",
+      "additionalProperties": true,
+      "examples": [
+        { "hash": "sha256:...", "other_conversation_id": "conv_01...", "other_phone": "+549..." },
+        { "amount": 250000, "threshold": 100000 },
+        { "messages_per_minute": 35 }
+      ]
+    },
+    "observed_at": { "type": "string", "format": "date-time" }
+  },
+  "responses": {
+    "201": { "example": { "risk_event_id": "risk_01HX...", "recommended_action": "handoff|block|warn|continue" } }
+  }
+}

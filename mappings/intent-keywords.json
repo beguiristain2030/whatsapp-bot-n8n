@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Reglas de clasificación por keywords usadas por WA - Detect Intent Rules. Prioridad descendente (primero gana). Las acciones con dinero exigen keywords explícitas.",
+  "version": "1.0",
+  "normalization": {
+    "lowercase": true,
+    "strip_accents": true,
+    "collapse_whitespace": true,
+    "strip_punctuation": false
+  },
+  "intents": [
+    {
+      "intent": "handoff",
+      "priority": 100,
+      "keywords": [
+        "hablar con una persona",
+        "hablar con alguien",
+        "hablar con un humano",
+        "hablar con humano",
+        "quiero un operador",
+        "atencion al cliente",
+        "atencion humana",
+        "persona real",
+        "agente real",
+        "pasame con alguien",
+        "comunicame con alguien"
+      ],
+      "regex": ["\\b(operador|humano|persona|agente)\\b"]
+    },
+    {
+      "intent": "retirar_saldo",
+      "priority": 90,
+      "keywords": [
+        "retirar",
+        "retiro",
+        "quiero retirar",
+        "sacar plata",
+        "sacar dinero",
+        "cobrar",
+        "withdrawal"
+      ],
+      "regex": ["\\bretir(o|ar|ando)\\b", "\\bsacar\\b"]
+    },
+    {
+      "intent": "cargar_saldo",
+      "priority": 80,
+      "keywords": [
+        "cargar",
+        "carga",
+        "quiero cargar",
+        "deposito",
+        "depositar",
+        "ingresar plata",
+        "ingresar dinero",
+        "acreditar",
+        "recargar"
+      ],
+      "regex": ["\\bcarg(a|ar|o|ando)\\b", "\\bdeposit(o|ar)\\b"]
+    },
+    {
+      "intent": "crear_usuario",
+      "priority": 70,
+      "keywords": [
+        "crear cuenta",
+        "quiero registrarme",
+        "registro",
+        "nueva cuenta",
+        "soy nuevo",
+        "alta",
+        "abrir cuenta"
+      ],
+      "regex": ["\\bregistr(o|ar|ame|arme)\\b", "\\balta\\b"]
+    },
+    {
+      "intent": "soporte",
+      "priority": 60,
+      "keywords": [
+        "problema",
+        "error",
+        "no me funciona",
+        "no puedo",
+        "ayuda",
+        "reclamo",
+        "queja"
+      ],
+      "regex": ["\\bno\\s+(me\\s+)?(funciona|anda|puedo)\\b", "\\breclam(o|ar)\\b"]
+    },
+    {
+      "intent": "consulta",
+      "priority": 50,
+      "keywords": [
+        "saldo",
+        "consulta",
+        "consultar",
+        "estado",
+        "informacion",
+        "como",
+        "cuando",
+        "donde",
+        "horario"
+      ],
+      "regex": ["\\bsaldo\\b", "\\bhorario\\b"]
+    }
+  ],
+  "fallback_intent": "unknown",
+  "fallback_strategy": {
+    "max_fallbacks_before_handoff": 3,
+    "steps": [
+      "no_entiendo_pregunta_opciones",
+      "menu_numerado",
+      "handoff_automatico"
+    ]
+  },
+  "hard_rules": {
+    "retirar_saldo": {
+      "requires_explicit_keyword": true,
+      "min_confidence_rules": 1.0,
+      "never_inferred_by_llm_alone": true
+    }
+  }
+}
