@@ -317,7 +317,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const raw =\n  $json?.contenido?.[0]?.texto ||\n  $json?.producción?.[0]?.contenido?.[0]?.texto ||\n  $json?.produccion?.[0]?.contenido?.[0]?.texto ||\n  \"\";\n\nlet clean = raw;\n\nconst start = clean.indexOf(\"{\");\nconst end = clean.lastIndexOf(\"}\");\n\nif (start !== -1 && end !== -1 && end > start) {\n  clean = clean.slice(start, end + 1);\n}\n\nclean = clean\n  .replace(/\\\\n/g, \"\")\n  .replace(/\\\\\"/g, '\"')\n  .trim();\n\nlet parsed;\n\ntry {\n  parsed = JSON.parse(clean);\n} catch (e) {\n  parsed = {\n    intent: \"unknown_intent\",\n    confidence: 0,\n    reply: \"no te entendi\"\n  };\n}\n\nreturn {\n  ...$json,\n  intent: parsed.intent || \"unknown_intent\",\n  confidence: parsed.confidence || 0,\n  reply: parsed.reply || \"\"\n};"
+        "jsCode": "const raw =\n  $json?.producción?.[0]?.contenido?.[0]?.texto ||\n  $json?.produccion?.[0]?.contenido?.[0]?.texto ||\n  $json?.contenido?.[0]?.texto ||\n  $json?.message?.content ||\n  $json?.content ||\n  $json?.text ||\n  \"\";\n\nlet text = String(raw).trim();\n\ntext = text.replace(/^```(?:json)?\\s*/i, \"\").replace(/\\s*```$/, \"\").trim();\n\nconst start = text.indexOf(\"{\");\nconst end = text.lastIndexOf(\"}\");\nif (start !== -1 && end > start) {\n  text = text.slice(start, end + 1);\n}\n\nlet parsed = null;\n\ntry {\n  parsed = JSON.parse(text);\n} catch (e1) {\n  try {\n    const unescaped = text\n      .replace(/\\\\n/g, \"\\n\")\n      .replace(/\\\\r/g, \"\\r\")\n      .replace(/\\\\t/g, \"\\t\")\n      .replace(/\\\\\"/g, '\"')\n      .replace(/\\\\\\\\/g, \"\\\\\");\n    parsed = JSON.parse(unescaped);\n  } catch (e2) {\n    parsed = null;\n  }\n}\n\nif (!parsed) {\n  const intentMatch = text.match(/\"intent\"\\s*:\\s*\"([^\"]+)\"/);\n  const confMatch = text.match(/\"confidence\"\\s*:\\s*([\\d.]+)/);\n  const replyMatch = text.match(/\"reply\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"/);\n  if (intentMatch) {\n    parsed = {\n      intent: intentMatch[1],\n      confidence: confMatch ? parseFloat(confMatch[1]) : 0,\n      reply: replyMatch ? replyMatch[1].replace(/\\\\n/g, \"\\n\").replace(/\\\\\"/g, '\"') : \"\"\n    };\n  }\n}\n\nif (!parsed || typeof parsed !== \"object\") {\n  parsed = { intent: \"unknown_intent\", confidence: 0, reply: \"no te entendi\" };\n}\n\nreturn {\n  ...$json,\n  intent: parsed.intent || \"unknown_intent\",\n  confidence: typeof parsed.confidence === \"number\" ? parsed.confidence : 0,\n  reply: parsed.reply || \"\"\n};"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -395,10 +395,34 @@
             "index": 0
           }
         ],
-        [],
-        [],
-        [],
-        [],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
