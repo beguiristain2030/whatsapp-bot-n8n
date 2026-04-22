@@ -1,0 +1,451 @@
+{
+  "name": "WA - Main Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wa-main-orchestrator",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "id": "0327e7a9-b5c0-4987-ab56-90b495e843da",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        -448
+      ],
+      "webhookId": "5e73d314-ed83-43ef-8141-c456d035cda8"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst body = item.json.body || item.json;\n\n// Required fields\nconst requiredFields = [\n  { path: 'tenant_id', value: body.tenant_id },\n  { path: 'correlation_id', value: body.correlation_id },\n  { path: 'phone', value: body.phone },\n  { path: 'message.text', value: body.message?.text },\n  { path: 'conversation.conversation_id', value: body.conversation?.conversation_id }\n];\n\n// Check missing fields\nconst missing = requiredFields\n  .filter(field => !field.value)\n  .map(field => field.path);\n\nif (missing.length > 0 && !body._test_mode) {  return [{\n    json: {\n      success: false,\n      stage: 'wa_main_entry',\n      error_code: 'INVALID_INPUT',\n      message: 'Missing required fields',\n      missing_fields: missing,\n      correlation_id: body.correlation_id || 'unknown',\n      tenant_id: body.tenant_id || 'unknown',\n      _validation_failed: true\n    }\n  }];\n}\n\n// Validation passed\nreturn [{\n  json: {\n    ...body,\n    _validation_passed: true\n  }\n}];"
+      },
+      "id": "34e7cfac-60e5-485a-afce-06813782157c",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst data = item.json;\n\n// If validation failed, pass through error\nif (data._validation_failed) {\n  return [{ json: data }];\n}\n\n// Prepare context with safe defaults and flags\nreturn [{\n  json: {\n    ...data,\n    stage: 'wa_main_entry',\n    channel: data.channel || 'whatsapp',\n    source: data.source || 'whatsapp',\n    is_text_message: data.message?.type === 'text' && !!data.message?.text,\n    has_user: !!data.user?.user_id,\n    has_contact: !!data.contact?.contact_id,\n    processed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "d5b0d2ee-cf16-4d73-919a-1275ec32fb63",
+      "name": "Prepare Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        -448
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=Analizá el mensaje de WhatsApp y respondé SOLO en JSON.\n\n## 🎯 OBJETIVO\n\nActuar como operador real de cargas y retiros (cajero), no como asistente.\n\nResponder como humano real que trabaja operando cuentas, no como chatbot.\n\n---\n\n## 🧠 INTENCIONES\n\nDetectar UNA sola intención principal:\n\n* deposit_intent (cargar saldo)\n* withdraw_intent (retiro)\n* create_user_intent (crear usuario / dar acceso)\n* link_request_intent (pedir link)\n* access_problem_intent (no puede entrar / jugar)\n* maintenance_intent (plataforma caída o mantenimiento)\n* delay_billetera_intent (demoras bancarias / billeteras)\n* bonus_intent (bonos / promociones)\n* phishing_check_intent (mensaje sospechoso)\n* support_intent (consulta general)\n* unknown_intent\n\n---\n\n## 🗣️ ESTILO REAL (CRÍTICO)\n\nResponder EXACTAMENTE como operador humano:\n\n* minúsculas\n* corto\n* directo\n* seco\n* sin explicación\n* sin emojis\n* sin estructura\n* sin texto largo\n* puede responder sin contexto perfecto\n\n---\n\n## ⚠️ COMPORTAMIENTO REAL\n\n* no actuar como asistente\n* no explicar procesos\n* no guiar paso a paso\n* muchas veces ejecutar sin preguntar\n* pedir SOLO lo necesario\n* responder incluso con 1 palabra si aplica\n\n---\n\n## 🚫 REGLAS CRÍTICAS\n\n* no repetir palabras del usuario\n* no sonar amable artificial\n* no usar lenguaje formal\n* no parecer IA\n* no corregir redacción\n* no dar respuestas largas\n\n---\n\n## 🔗 LINK (IMPORTANTE)\n\nSi el usuario pide link:\n\nNO mandar links\n\nResponder SOLO con:\n\n* fijate en la info\n* ahi lo tenes\n* entra desde la info\n\n---\n\n## 🧩 COMPORTAMIENTO POR CASO\n\n### 🟢 CARGA (deposit)\n\n* muchas veces mandar datos directo\n* pedir comprobante\n* pedir nombre si falta\n\nEjemplos:\n\n0000003100002831851523\nalias erica.mp\na nombre de erica\n\npasame el comprobante\npasame el nombre\n\n---\n\n### 🔵 RETIRO\n\n* confirmar datos\n* avisar espera\n\nEjemplos:\n\nen breve estamos con tu retiro\npasame cbu\nmonto?\nnombre del titular\n\n---\n\n### 🟣 ACCESO / USUARIO\n\nEjemplos:\n\nusuario: xxxx\nclave: hola1234\ncambiala cuando entres\n\n---\n\n### 🟡 MANTENIMIENTO\n\nEjemplos:\n\nesta en mantenimiento\nno esta funcionando ahora\nte paso otra\n\n---\n\n### 🟠 DEMORA BILLETERAS\n\nEjemplos:\n\nestan con demora\npuede tardar en impactar\nprobá con otra billetera\n\n---\n\n### 🔴 PHISHING\n\nEjemplos:\n\nno es nuestro\nese mensaje no es oficial\n\n---\n\n### 🟢 BONO\n\nEjemplos:\n\ntenes bono activo\nya te lo cargue\n\n---\n\n## 🔁 VARIACIÓN\n\nUsar respuestas reales:\n\ncargado\ncargad0\nlisto\nya entro\nahi esta\nok\nen breve\n\n---\n\n## 🎭 NATURALIDAD\n\n* puede no responder exactamente lo que preguntan\n* puede responder incompleto\n* puede cortar la conversación\n* no mantener conversación perfecta\n\n---\n\n## 📦 FORMATO OBLIGATORIO\n\nResponder SOLO con JSON:\n\n{\n\"intent\": \"...\",\n\"confidence\": 0.0,\n\"reply\": \"mensaje\"\n}\n\n---\n\n## 📩 MENSAJE\n\n{{$json.message.text}}\n"
+            },
+            {
+              "content": "={{$json.message.text}}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1136,
+        -448
+      ],
+      "id": "b4322919-044b-4be2-8e9f-0e161208718a",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "qrsl8vS5Wzt1bsMg",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cb1a00be-1e1a-4cb1-a501-1724d77bd772",
+              "name": "message.text",
+              "value": "{   \"message.text\": \"hola quiero cargar\",   \"_test_mode\": true }",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        912,
+        -448
+      ],
+      "id": "531c6c0e-6d7f-4f61-88ba-db758a45f631",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "deposit_intent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "21d45b0a-91f9-47c1-a747-4f8bba079872"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9e810f96-cf2a-40e7-abf3-32f60be107ed",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "withdraw_intent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "e349b42c-75c0-4b50-8b96-d40248b780dd",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "access_problem_intent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4b0db26a-d6de-4558-a244-d1dcb2f65c2e",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "maintenance_intent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "596b43f1-75e0-40fa-94d3-ce12c5d79c7d",
+                    "leftValue": "={{$json.intent}}",
+                    "rightValue": "delay_billetera_intent",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1712,
+        -496
+      ],
+      "id": "f7c1f281-aeba-4103-a661-073ebf952121",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://germans-evolution-api.lumpgl.easypanel.host/chat/sendPresence/gerconstru",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "E2CC00EE5E29-49A7-AFB6-DED7E76A548C"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"number\": \"5492262548540\",\n  \"options\": {\n    \"delay\": 3000,\n    \"presence\": \"composing\"\n  }\n}",
+        "options": {
+          "timeout": 3000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1936,
+        -608
+      ],
+      "id": "efb1fddb-193b-43a4-96dc-3f5d62f0c8bc",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2160,
+        -448
+      ],
+      "id": "e05b0641-0416-47fa-828d-734cf070dc2a",
+      "name": "Wait",
+      "webhookId": "ed3b4d68-a79c-4d45-9f97-1799269db71f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://germans-evolution-api.lumpgl.easypanel.host/message/sendText/gerconstru",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "E2CC00EE5E29-49A7-AFB6-DED7E76A548C"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"5492262548540\",\n  \"text\": \"{{ $json.reply }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2384,
+        -448
+      ],
+      "id": "66ee39fb-f597-4194-91b0-9e8926205a86",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw =\n  $json?.contenido?.[0]?.texto ||\n  $json?.producción?.[0]?.contenido?.[0]?.texto ||\n  $json?.produccion?.[0]?.contenido?.[0]?.texto ||\n  \"\";\n\nlet clean = raw;\n\nconst start = clean.indexOf(\"{\");\nconst end = clean.lastIndexOf(\"}\");\n\nif (start !== -1 && end !== -1 && end > start) {\n  clean = clean.slice(start, end + 1);\n}\n\nclean = clean\n  .replace(/\\\\n/g, \"\")\n  .replace(/\\\\\"/g, '\"')\n  .trim();\n\nlet parsed;\n\ntry {\n  parsed = JSON.parse(clean);\n} catch (e) {\n  parsed = {\n    intent: \"unknown_intent\",\n    confidence: 0,\n    reply: \"no te entendi\"\n  };\n}\n\nreturn {\n  ...$json,\n  intent: parsed.intent || \"unknown_intent\",\n  confidence: parsed.confidence || 0,\n  reply: parsed.reply || \"\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -448
+      ],
+      "id": "6e85de9e-8c08-43d4-b163-07323235f245",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Context": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "e692cbf5-fa94-423f-a6e3-ba8aacb8fb61",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "8165f5f8530e3eb3d75ac2cd46c51982b82512c2db5ee22a9e949b096ae56b64"
+  },
+  "id": "hrPsuSiy4LOvLouW",
+  "tags": []
+}
